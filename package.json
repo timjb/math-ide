@@ -1,0 +1,22 @@
+{
+  "name": "math-ide",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "prosemirror-example-setup": "^0.20.0",
+    "prosemirror-history": "^0.20.0",
+    "prosemirror-keymap": "^0.20.0",
+    "prosemirror-menu": "^0.20.0",
+    "prosemirror-model": "^0.20.0",
+    "prosemirror-schema-basic": "^0.20.0",
+    "prosemirror-state": "^0.20.0",
+    "prosemirror-view": "^0.20.3"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Tim Baumann",
+  "license": "ISC"
+}
