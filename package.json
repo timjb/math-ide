@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "dependencies": {
+    "prosemirror-commands": "^0.20.0",
     "prosemirror-example-setup": "^0.20.0",
     "prosemirror-history": "^0.20.0",
     "prosemirror-keymap": "^0.20.0",

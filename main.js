@@ -1,11 +1,327 @@
-const {EditorState} = require("prosemirror-state");
+const {EditorState, Plugin, NodeSelection, TextSelection} = require("prosemirror-state");
 const {EditorView} = require("prosemirror-view");
-const {Schema, DOMParser} = require("prosemirror-model");
+const {Schema, DOMParser, Fragment, Slice} = require("prosemirror-model");
 const {schema} = require("prosemirror-schema-basic");
 const history = require("prosemirror-history");
 const {keymap} = require("prosemirror-keymap");
-const {MenuItem, menuBar, blockTypeItem} = require("prosemirror-menu");
+const {ProseMirrorMenu, MenuItem, menuBar, blockTypeItem} = require("prosemirror-menu");
 const {buildMenuItems} = require("prosemirror-example-setup");
+const {baseKeymap, chainCommands} = require("prosemirror-commands");
+
+const Keys = {
+  isUndo: (evt) => !evt.altKey && (evt.ctrlKey || evt.metaKey) && evt.which == 90 && !evt.shiftKey,
+  isRedo: (evt) => !evt.altKey && (evt.ctrlKey || evt.metaKey) && (evt.which == 89 || evt.which == 90 && evt.shiftKey),
+  isSelectAll: (evt) => !evt.altKey && (evt.ctrlKey || evt.metaKey) && evt.which == 65,
+  isBacktick: (evt) => !evt.altKey && !evt.ctrlKey && !evt.metaKey && !evt.shiftKey && evt.which == 192,
+};
+
+class CallbackRegistry {
+  constructor() {
+    this.counter = 0;
+    this.callbacks = {};
+  }
+
+  add(e) {
+    const idx = this.counter;
+    this.callbacks[idx] = e;
+    this.counter += 1;
+    return () => { delete this.callbacks[idx]; };
+  }
+
+  invoke(e, t) {
+    for (var n in this.callbacks) {
+      this.callbacks[n](e, t);
+    }
+  }
+}
+
+function makeDispatcherPlugin () {
+  var state = {
+    init() {
+      return new CallbackRegistry();
+    },
+
+    apply(tr, registry, oldState, newState) {
+      registry.invoke(tr, newState);
+      return registry;
+    }
+  };
+  return new Plugin({ state: state });
+}
+
+/*function SystemKeyboardMathField(e, t) {
+  t == null && (t = {});
+  t = _.extend(t, {
+    substituteTextarea: function() {
+      return $("<textarea>")[0];
+    }
+  });
+  return MathQuill.MathField(e, t);
+}*/
+
+//const touchtracking = require("touchtracking");
+
+function simpleDiff (x, y) {
+  let n = 0;
+  let r = x.length;
+  let i = y.length;
+  while (n < r && x.charCodeAt(n) == y.charCodeAt(n)) {
+    ++n;
+  }
+  // bug here?!
+  while (r > n && i > n && x.charCodeAt(r - 1) == y.charCodeAt(i - 1)) {
+    r--;
+    i--;
+  }
+  return {
+    from: n,
+    to: r,
+    text: y.slice(n, i)
+  };
+}
+
+class MqNodeView {
+  constructor(node, view, getPos, dispatcherPlugin) {
+    this.node = node;
+    this.view = view;
+    this.getPos = getPos;
+    this.dom = $('<span class="mq-node">').get(0);
+    this.value = node.textContent;
+    this.focusing = false;
+    $(this.dom).on("focusin", () => {
+      if (this.focusing) { return; }
+      const selection = NodeSelection.create(this.view.state.doc, this.getPos());
+      this.view.dispatch(this.view.state.tr.setSelection(selection));
+    });
+    this.updating = true;
+    this.mathquill = MathQuill.MathField(this.dom, {
+      handlers: {
+        deleteOutOf: (direction, mathField) => {
+          this.exitHandler(direction, mathField);
+        },
+        moveOutOf: (direction, mathField) => {
+          this.exitHandler(direction, mathField);
+        },
+        reflow: () => {
+          this.onChange();
+        },
+        enter: (mathField) => {
+          this.exitHandler(1, mathField);
+        }
+      },
+      substituteKeyboardEvents(textarea, handlers) {
+        var newHandlers = {};
+        for (var key in handlers) { newHandlers[key] = handlers[key]; }
+
+        var generalKeystrokeHandler = newHandlers.keystroke.bind(newHandlers);
+        newHandlers.keystroke = (e, evt) => {
+          if (Keys.isUndo(evt)) {
+            if (history.undo(this.view.state, this.view.dispatch)) { evt.preventDefault(); }
+          } else if (Keys.isRedo(evt)) {
+            if (history.redo(this.view.state, this.view.dispatch)) { evt.preventDefault(); }
+          } else if (Keys.isBacktick(evt)) {
+            evt.preventDefault();
+            this.exitHandler(1, this.mathquill);
+          } else {
+            generalKeystrokeHandler(e, evt);
+          }
+        };
+        return mathquill.saneKeyboardEvents(textarea, newHandlers);
+      }
+    });
+    requestAnimationFrame(() => this.mathquill.reflow());
+    this.mathquill.latex(node.textContent);
+    this.updating = false;
+    const callbackRegistry = dispatcherPlugin.getState(view.state);
+    this.removeToken = callbackRegistry.add((tr, newState) => {
+      this.setCursorPos(tr);
+    });
+  }
+  
+  setCursorPos(tr) {
+    const pos = this.getPos();
+    const nodeSize = this.node.nodeSize;
+    if (!(tr.selection.from < pos + nodeSize && pos < tr.selection.to)) {
+      if (pos < tr.selection.from) {
+        this.cursorPos = "end";
+      } else {
+        this.cursorPos = "start";
+      }
+    }
+  }
+
+  exitHandler (direction, mathField) {
+    if (mathField.latex().length == 0) {
+      this.view.dispatch(this.view.state.tr.deleteSelection());
+    } else if (direction == -1) {
+      this.selectBefore();
+    } else if (direction == 1) {
+      this.selectAfter();
+    }
+    this.view.focus();
+  }
+
+  selectAfter () {
+    const selection = TextSelection.create(this.view.state.doc, this.getPos() + this.node.nodeSize);
+    this.view.dispatch(this.view.state.tr.setSelection(selection));
+  }
+
+  selectBefore () {
+    const selection = TextSelection.create(this.view.state.doc, this.getPos());
+    this.view.dispatch(this.view.state.tr.setSelection(selection));
+  }
+
+  onChange () {
+    if (this.updating) { return; }
+    var newValue = this.mathquill.latex();
+    if (newValue != this.value) {
+      const diff = simpleDiff(this.value, newValue);
+      const pos = this.getPos() + 1;
+      this.value = newValue;
+      var action = this.view.state.tr.replaceWith(
+        pos + diff.from,
+        pos + diff.to,
+        diff.text ? this.view.state.schema.text(diff.text) : null
+      );
+      this.view.dispatch(action);
+    }
+  }
+
+  update (newNode) {
+    if (newNode.type != this.node.type) { return false; }
+    this.node = newNode;
+    const newContent = newNode.textContent;
+    if (newContent != this.value) {
+      this.value = newContent;
+      this.updating = true;
+      this.mathquill.latex(newContent);
+      this.updating = false;
+    }
+    return true;
+  }
+
+  selectNode () {
+    if (this.cursorPos == "start") {
+      this.mathquill.moveToLeftEnd();
+    } else {
+      this.mathquill.moveToRightEnd();
+    }
+    this.focusing = true;
+    this.mathquill.focus();
+    this.focusing = false;
+  }
+
+  stopEvent() { return true; }
+  ignoreMutation() { return true; }
+
+  destroy () {
+    $(this.dom).off("focusin");
+    this.removeToken();
+  }
+}
+
+function makeMqAction (callback) {
+  return (editorState, dispatch) => {
+    const selectedText = editorState.doc.textBetween(editorState.selection.from, editorState.selection.to);
+    const mqNode = editorState.schema.nodes.mq;
+    const newMqNode = mqNode.create(undefined, selectedText.length > 0 ? editorState.schema.text(selectedText) : undefined);
+    const newState = editorState.tr.replaceSelectionWith(newMqNode);
+    const setSelection = newState.setSelection(NodeSelection.create(newState.doc, editorState.selection.from));
+    if (dispatch != undefined) { dispatch(setSelection); }
+    if (typeof callback == "function") { callback(); }
+    return true;
+  };
+}
+
+function mqBackspaceCommand (editorState, dispatch) {
+  if (!editorState.selection.empty) { return false; }
+  var prevNode = editorState.selection.$from.nodeBefore;
+  if (prevNode && prevNode.type.name == "mq") {
+    var setSelection = editorState.tr.setSelection(NodeSelection.create(editorState.doc, editorState.selection.from - prevNode.nodeSize));
+    if (dispatch != undefined) { dispatch(setSelection); }
+    return true;
+  }
+  return false;
+}
+
+function mqDeleteCommand (editorState, dispatch) {
+  if (!editorState.selection.empty) { return false; }
+  var nextNode = editorState.selection.$from.nodeAfter;
+  if (nextNode && nextNode.type.name == "mq") {
+    const setSelection = editorState.tr.setSelection(NodeSelection.create(editorState.doc, editorState.selection.from));
+    if (dispatch != undefined) { dispatch(setSelection); }
+    return true;
+  }
+  return false;
+}
+
+function splitOnRegex (str, regex) {
+  let matches = [], pos = 0, match;
+  while (match = regex.exec(str)) {
+    const matchStart = match.index;
+    const matchEnd = matchStart + match[0].length;
+    if (matchStart > pos) {
+      matches.push({
+        matched: false,
+        text: str.substr(pos, matchStart - pos),
+        start: pos,
+        end: matchStart
+      });
+    }
+    matches.push({
+      matched: true,
+      text: str.substr(matchStart, matchEnd - matchStart),
+      start: matchStart,
+      end: matchEnd
+    });
+    pos = matchEnd;
+  }
+  if (pos < str.length) {
+    matches.push({
+      matched: false,
+      text: str.substr(pos),
+      start: pos,
+      end: str.length
+    });
+  }
+  return matches;
+}
+
+function makePastePlugin (regex, mkNode) {
+  function transformNode(node) {
+    if (node.isText) {
+      return splitOnRegex(node.text, regex).map((section) => {
+        if (section.matched) {
+          return mkNode(node, section.start, section.end);
+        } else {
+          return node.cut(section.start, section.end);
+        }
+      });
+    } else {
+      return [node.copy(transformFragment(node.content))];
+    }
+  }
+
+  function transformFragment(fragment) {
+    let transformed = [];
+    fragment.forEach((node) => {
+      transformed = transformed.concat(transformNode(node));
+    });
+    return Fragment.fromArray(transformed);
+  }
+
+  function transformPasted (slice) {
+    return new Slice(transformFragment(slice.content), slice.openLeft, slice.openRight);
+  }
+
+  return new Plugin({ props: { transformPasted: transformPasted } });
+}
+
+const MQ_REGEX = /\$[^\$]*\$/ig;
+const mathPastePlugin = makePastePlugin(MQ_REGEX, (node, start, end) => {
+  const mqNode = node.type.schema.nodes.mq;
+  return start + 1 < end - 1 ? mqNode.create(undefined, node.cut(start + 1, end - 1)) : mqNode.create();
+});
 
 const nodes = {
   doc: {
@@ -101,6 +417,16 @@ const nodes = {
     selectable: false,
     parseDOM: [{tag: "br"}],
     toDOM() { return ["br"] }
+  },
+
+  mq: {
+    inline: true,
+    group: "inline",
+    content: "text*",
+    selectable: true,
+    toDOM(node) {
+      return "$" + node.textContent + "$";
+    }
   }
 };
 
@@ -155,14 +481,50 @@ const makeProofItem = blockTypeItem(mathSchema.nodes.proof, {
 });
 menu.typeMenu.content = [makeLemmaItem,makeProofItem].concat(menu.typeMenu.content);
 
-window.view = new EditorView(document.querySelector("#editor"), {
-  state: EditorState.create({
-    schema: mathSchema,
-    doc: DOMParser.fromSchema(mathSchema).parse(document.querySelector("#content")),
-    plugins: [
-      history.history(),
-      keymap({ "Mod-z": history.undo, "Mod-y": history.redo }),
-      menuBar({ floating: false, content: menu.fullMenu })
-    ]
-  }),
-});
+function initProseMirror () {
+    var isMac = typeof navigator != "undefined" ? /Mac/.test(navigator.platform) : false;
+    const mathKeymap = Object.assign(
+      {},
+      baseKeymap,
+      {
+        "$": makeMqAction(() => {
+          // WORKAROUND for ProseMirror bug: reset shiftKey
+          proseMirrorView.shiftKey = false;
+        }),
+        Backspace: chainCommands(mqBackspaceCommand, baseKeymap.Backspace),
+        Delete: chainCommands(mqDeleteCommand, baseKeymap.Delete),
+        "Mod-z": history.undo,
+        "Shift-Mod-z": history.redo
+      },
+      isMac ? {} : { "Mod-y": history.redo }
+    );
+
+  const dispatcherPlugin = makeDispatcherPlugin();
+  const proseMirrorView = new EditorView(document.querySelector("#editor"), {
+    state: EditorState.create({
+      schema: mathSchema,
+      doc: DOMParser.fromSchema(mathSchema).parse(document.querySelector("#content")),
+      plugins: [
+        dispatcherPlugin,
+        mathPastePlugin,
+        history.history(),
+        keymap(mathKeymap),
+        menuBar({ floating: false, content: menu.fullMenu })
+      ]
+    }),
+    nodeViews: {
+      mq(node, view, getPos) {
+        return new MqNodeView(node, view, getPos, dispatcherPlugin);
+      }
+    }
+  });
+  proseMirrorView.focus();
+  dispatcherPlugin.getState(proseMirrorView.state).add((tr, editorState) => {
+    if (!proseMirrorView.hasFocus() && (editorState.selection.node == undefined || editorState.selection.node.type.name != "mq")) {
+      proseMirrorView.focus();
+    }
+  });
+  window.proseMirrorView = proseMirrorView;
+}
+
+window.onload = initProseMirror;

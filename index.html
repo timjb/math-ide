@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="node_modules/prosemirror-view/style/prosemirror.css" />
   <link rel="stylesheet" href="node_modules/prosemirror-menu/style/menu.css" />
   <link rel="stylesheet" href="node_modules/prosemirror-example-setup/style/style.css" />
+  <link rel="stylesheet" href="deps/mathquill/mathquill.css" />
   <style>
     /*.ProseMirror { background: silver }*/
     .lemma::before {
@@ -48,6 +49,17 @@
   </div>
 </div>
 
+<p>Math to do:</p>
+<ul>
+  <li>Fix undo/redo</li>
+  <li>Exit by entering $</li>
+  <li>Math in menu</li>
+  <li>Math styling (smaller font)</li>
+</ul>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<script src="deps/mathquill/mathquill.min.js"></script>
+<script>MathQuill = MathQuill.getInterface(1.0);</script>
 <script src="main_bundle.js"></script>
 
 </body>
