@@ -1,12 +1,19 @@
-const {EditorState, Plugin, NodeSelection, TextSelection} = require("prosemirror-state");
-const {EditorView} = require("prosemirror-view");
-const {Schema, DOMParser, Fragment, Slice} = require("prosemirror-model");
-const {schema} = require("prosemirror-schema-basic");
-const history = require("prosemirror-history");
-const {keymap} = require("prosemirror-keymap");
-const {ProseMirrorMenu, MenuItem, menuBar, blockTypeItem} = require("prosemirror-menu");
-const {buildMenuItems} = require("prosemirror-example-setup");
-const {baseKeymap, chainCommands} = require("prosemirror-commands");
+import {EditorState, Plugin, NodeSelection, TextSelection} from "prosemirror-state";
+import {EditorView, EditorProps} from "prosemirror-view";
+import {Schema, DOMParser, ProsemirrorNode, Fragment, Slice} from "prosemirror-model";
+import * as history from "prosemirror-history";
+import {keymap} from "prosemirror-keymap";
+import {MenuItem, Dropdown, menuBar, blockTypeItem} from "prosemirror-menu";
+import {baseKeymap, chainCommands} from "prosemirror-commands";
+import {buildMenuItems} from "prosemirror-example-setup";
+
+/// <reference types="jquery" />
+
+declare var MathQuill: any;
+
+namespace window {
+  export var prosemirrorView;
+}
 
 const Keys = {
   isUndo: (evt) => !evt.altKey && (evt.ctrlKey || evt.metaKey) && evt.which == 90 && !evt.shiftKey,
@@ -15,7 +22,10 @@ const Keys = {
   isBacktick: (evt) => !evt.altKey && !evt.ctrlKey && !evt.metaKey && !evt.shiftKey && evt.which == 192,
 };
 
-class CallbackRegistry {
+class CallbackRegistry<A, B> {
+  private counter: number;
+  private callbacks: { [i: number]: (a: A, b: B) => void };
+
   constructor() {
     this.counter = 0;
     this.callbacks = {};
@@ -28,7 +38,7 @@ class CallbackRegistry {
     return () => { delete this.callbacks[idx]; };
   }
 
-  invoke(e, t) {
+  invoke(e: A, t: B) {
     for (var n in this.callbacks) {
       this.callbacks[n](e, t);
     }
@@ -81,6 +91,17 @@ function simpleDiff (x, y) {
 }
 
 class MqNodeView {
+  private node;
+  private view;
+  private getPos;
+  private dom: HTMLElement;
+  private mathquill;
+  private value: string;
+  private cursorPos: "start" | "end";
+  private focusing: boolean;
+  private updating: boolean;
+  private removeToken: () => void;
+
   constructor(node, view, getPos, dispatcherPlugin) {
     this.node = node;
     this.view = view;
@@ -113,8 +134,8 @@ class MqNodeView {
         var newHandlers = {};
         for (var key in handlers) { newHandlers[key] = handlers[key]; }
 
-        var generalKeystrokeHandler = newHandlers.keystroke.bind(newHandlers);
-        newHandlers.keystroke = (e, evt) => {
+        var generalKeystrokeHandler = newHandlers['keystroke'].bind(newHandlers);
+        newHandlers['keystroke'] = (e, evt) => {
           if (Keys.isUndo(evt)) {
             if (history.undo(this.view.state, this.view.dispatch)) { evt.preventDefault(); }
           } else if (Keys.isRedo(evt)) {
@@ -126,7 +147,7 @@ class MqNodeView {
             generalKeystrokeHandler(e, evt);
           }
         };
-        return mathquill.saneKeyboardEvents(textarea, newHandlers);
+        return MathQuill.saneKeyboardEvents(textarea, newHandlers);
       }
     });
     requestAnimationFrame(() => this.mathquill.reflow());
@@ -255,20 +276,28 @@ function mqDeleteCommand (editorState, dispatch) {
   return false;
 }
 
-function splitOnRegex (str, regex) {
-  let matches = [], pos = 0, match;
+interface SubString {
+  matched: boolean,
+  text: string,
+  start: number,
+  end: number
+}
+
+function splitOnRegex (str, regex): SubString[] {
+  const subStrings: SubString[] = [];
+  let pos = 0, match;
   while (match = regex.exec(str)) {
     const matchStart = match.index;
     const matchEnd = matchStart + match[0].length;
     if (matchStart > pos) {
-      matches.push({
+      subStrings.push({
         matched: false,
         text: str.substr(pos, matchStart - pos),
         start: pos,
         end: matchStart
       });
     }
-    matches.push({
+    subStrings.push({
       matched: true,
       text: str.substr(matchStart, matchEnd - matchStart),
       start: matchStart,
@@ -277,18 +306,18 @@ function splitOnRegex (str, regex) {
     pos = matchEnd;
   }
   if (pos < str.length) {
-    matches.push({
+    subStrings.push({
       matched: false,
       text: str.substr(pos),
       start: pos,
       end: str.length
     });
   }
-  return matches;
+  return subStrings;
 }
 
-function makePastePlugin (regex, mkNode) {
-  function transformNode(node) {
+function makePastePlugin (regex, mkNode): Plugin {
+  function transformNode(node: ProsemirrorNode): ProsemirrorNode[] {
     if (node.isText) {
       return splitOnRegex(node.text, regex).map((section) => {
         if (section.matched) {
@@ -302,9 +331,9 @@ function makePastePlugin (regex, mkNode) {
     }
   }
 
-  function transformFragment(fragment) {
-    let transformed = [];
-    fragment.forEach((node) => {
+  function transformFragment(fragment): Fragment {
+    let transformed: ProsemirrorNode[] = [];
+    fragment.forEach((node: ProsemirrorNode) => {
       transformed = transformed.concat(transformNode(node));
     });
     return Fragment.fromArray(transformed);
@@ -314,7 +343,8 @@ function makePastePlugin (regex, mkNode) {
     return new Slice(transformFragment(slice.content), slice.openLeft, slice.openRight);
   }
 
-  return new Plugin({ props: { transformPasted: transformPasted } });
+  const newProps: EditorProps = { transformPasted: transformPasted } as EditorProps;
+  return new Plugin({ props: newProps });
 }
 
 const MQ_REGEX = /\$[^\$]*\$/ig;
@@ -471,15 +501,21 @@ const mathSchema = new Schema({
 });
 
 const menu = buildMenuItems(mathSchema);
-const makeLemmaItem = blockTypeItem(mathSchema.nodes.lemma, {
+const makeLemmaItem = blockTypeItem(mathSchema.nodes['lemma'], {
   title: "Change to lemma",
   label: "Lemma"
 });
-const makeProofItem = blockTypeItem(mathSchema.nodes.proof, {
+const makeProofItem = blockTypeItem(mathSchema.nodes['proof'], {
   title: "Change to proof",
   label: "Proof"
 });
-menu.typeMenu.content = [makeLemmaItem,makeProofItem].concat(menu.typeMenu.content);
+
+namespace dropdown {
+  export function getContent(d: Dropdown): MenuItem[] { return d['content']; }
+  export function setContent(d: Dropdown, c: MenuItem[]) { d['content'] = c; }
+}
+
+dropdown.setContent(menu.typeMenu, [makeLemmaItem,makeProofItem].concat(dropdown.getContent(menu.typeMenu)));
 
 function initProseMirror () {
     var isMac = typeof navigator != "undefined" ? /Mac/.test(navigator.platform) : false;
@@ -489,21 +525,29 @@ function initProseMirror () {
       {
         "$": makeMqAction(() => {
           // WORKAROUND for ProseMirror bug: reset shiftKey
-          proseMirrorView.shiftKey = false;
+          proseMirrorView['shiftKey'] = false;
         }),
-        Backspace: chainCommands(mqBackspaceCommand, baseKeymap.Backspace),
-        Delete: chainCommands(mqDeleteCommand, baseKeymap.Delete),
+        Backspace: chainCommands(mqBackspaceCommand, baseKeymap['Backspace']),
+        Delete: chainCommands(mqDeleteCommand, baseKeymap['Delete']),
         "Mod-z": history.undo,
         "Shift-Mod-z": history.redo
       },
       isMac ? {} : { "Mod-y": history.redo }
     );
 
+  function querySelector(selector: string): Element {
+    function throwIfNull<A>(str: string, a: A | null) {
+      if (a == null) { throw new Error(str); }
+      return a;
+    }
+    return throwIfNull("no element with selector '"+selector+"' found!", document.querySelector(selector));
+  }
+
   const dispatcherPlugin = makeDispatcherPlugin();
-  const proseMirrorView = new EditorView(document.querySelector("#editor"), {
+  const proseMirrorView = new EditorView(querySelector("#editor"), {
     state: EditorState.create({
       schema: mathSchema,
-      doc: DOMParser.fromSchema(mathSchema).parse(document.querySelector("#content")),
+      doc: DOMParser.fromSchema(mathSchema).parse(querySelector("#content")),
       plugins: [
         dispatcherPlugin,
         mathPastePlugin,
@@ -524,7 +568,7 @@ function initProseMirror () {
       proseMirrorView.focus();
     }
   });
-  window.proseMirrorView = proseMirrorView;
+  window.prosemirrorView = proseMirrorView;
 }
 
-window.onload = initProseMirror;
+addEventListener('load', initProseMirror);

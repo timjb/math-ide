@@ -7,5 +7,5 @@ $ npm install
 ## Building
 
 ```bash
-$ browserify main.js --outfile main_bundle.js
+$ browserify main.ts -p tsify --outfile main_bundle.js
 ```

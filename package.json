@@ -10,11 +10,20 @@
     "prosemirror-keymap": "^0.20.0",
     "prosemirror-menu": "^0.20.0",
     "prosemirror-model": "^0.20.0",
-    "prosemirror-schema-basic": "^0.20.0",
     "prosemirror-state": "^0.20.0",
     "prosemirror-view": "^0.20.3"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@types/jquery": "^2.0.45",
+    "@types/prosemirror-commands": "^0.18.0",
+    "@types/prosemirror-history": "^0.18.0",
+    "@types/prosemirror-keymap": "^0.18.0",
+    "@types/prosemirror-menu": "^0.18.0",
+    "@types/prosemirror-model": "^0.18.0",
+    "@types/prosemirror-state": "^0.18.0",
+    "@types/prosemirror-view": "^0.18.0",
+    "typescript": "^2.3.2"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
