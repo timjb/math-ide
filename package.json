@@ -15,11 +15,8 @@
   },
   "devDependencies": {
     "@types/jquery": "^2.0.45",
-    "@types/prosemirror-commands": "^0.18.0",
     "@types/prosemirror-history": "^0.18.0",
     "@types/prosemirror-keymap": "^0.18.0",
-    "@types/prosemirror-menu": "^0.18.0",
-    "@types/prosemirror-model": "^0.18.0",
     "@types/prosemirror-state": "^0.18.0",
     "@types/prosemirror-view": "^0.18.0",
     "typescript": "^2.3.2"

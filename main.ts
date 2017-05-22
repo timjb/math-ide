@@ -1,25 +1,24 @@
-import {EditorState, Plugin, NodeSelection, TextSelection} from "prosemirror-state";
+import {EditorState, Plugin, Selection, NodeSelection, TextSelection, Transaction} from "prosemirror-state";
 import {EditorView, EditorProps} from "prosemirror-view";
-import {Schema, DOMParser, ProsemirrorNode, Fragment, Slice} from "prosemirror-model";
+import { Schema, DOMParser, ProsemirrorNode, Fragment, Slice, NodeSpec, MarkSpec, NodeType } from "prosemirror-model";
 import * as history from "prosemirror-history";
 import {keymap} from "prosemirror-keymap";
 import {MenuItem, Dropdown, menuBar, blockTypeItem} from "prosemirror-menu";
-import {baseKeymap, chainCommands} from "prosemirror-commands";
+import {baseKeymap, chainCommands, Command} from "prosemirror-commands";
 import {buildMenuItems} from "prosemirror-example-setup";
 
 /// <reference types="jquery" />
-
-declare var MathQuill: any;
+/// <reference types="mathquill" />
 
 namespace window {
-  export var prosemirrorView;
+  export var prosemirrorView: EditorView;
 }
 
 const Keys = {
-  isUndo: (evt) => !evt.altKey && (evt.ctrlKey || evt.metaKey) && evt.which == 90 && !evt.shiftKey,
-  isRedo: (evt) => !evt.altKey && (evt.ctrlKey || evt.metaKey) && (evt.which == 89 || evt.which == 90 && evt.shiftKey),
-  isSelectAll: (evt) => !evt.altKey && (evt.ctrlKey || evt.metaKey) && evt.which == 65,
-  isBacktick: (evt) => !evt.altKey && !evt.ctrlKey && !evt.metaKey && !evt.shiftKey && evt.which == 192,
+  isUndo: (evt: KeyboardEvent) => !evt.altKey && (evt.ctrlKey || evt.metaKey) && evt.which == 90 && !evt.shiftKey,
+  isRedo: (evt: KeyboardEvent) => !evt.altKey && (evt.ctrlKey || evt.metaKey) && (evt.which == 89 || evt.which == 90 && evt.shiftKey),
+  isSelectAll: (evt: KeyboardEvent) => !evt.altKey && (evt.ctrlKey || evt.metaKey) && evt.which == 65,
+  isBacktick: (evt: KeyboardEvent) => !evt.altKey && !evt.ctrlKey && !evt.metaKey && !evt.shiftKey && evt.which == 192
 };
 
 class CallbackRegistry<A, B> {
@@ -31,7 +30,7 @@ class CallbackRegistry<A, B> {
     this.callbacks = {};
   }
 
-  add(e) {
+  add(e: (a: A, b: B) => void) {
     const idx = this.counter;
     this.callbacks[idx] = e;
     this.counter += 1;
@@ -45,13 +44,13 @@ class CallbackRegistry<A, B> {
   }
 }
 
-function makeDispatcherPlugin () {
+function makeDispatcherPlugin(): Plugin {
   var state = {
     init() {
-      return new CallbackRegistry();
+      return new CallbackRegistry<Transaction,EditorState>();
     },
 
-    apply(tr, registry, oldState, newState) {
+    apply(tr: Transaction, registry: CallbackRegistry<Transaction,EditorState>, oldState: EditorState, newState: EditorState) {
       registry.invoke(tr, newState);
       return registry;
     }
@@ -59,19 +58,7 @@ function makeDispatcherPlugin () {
   return new Plugin({ state: state });
 }
 
-/*function SystemKeyboardMathField(e, t) {
-  t == null && (t = {});
-  t = _.extend(t, {
-    substituteTextarea: function() {
-      return $("<textarea>")[0];
-    }
-  });
-  return MathQuill.MathField(e, t);
-}*/
-
-//const touchtracking = require("touchtracking");
-
-function simpleDiff (x, y) {
+function simpleDiff (x: string, y: string) {
   let n = 0;
   let r = x.length;
   let i = y.length;
@@ -90,19 +77,28 @@ function simpleDiff (x, y) {
   };
 }
 
+type Direction = -1 | 1;
+
+function copySaneKeyboardHandlers({container=null, keystroke, typedText, cut, copy, paste}: MathQuill.SaneKeyboardHandlers): MathQuill.SaneKeyboardHandlers {
+  const o: MathQuill.SaneKeyboardHandlers = { keystroke, typedText, cut, copy, paste };
+  if (container != null) { o.container = container; }
+  return o;
+}
+
 class MqNodeView {
-  private node;
-  private view;
-  private getPos;
+
+  private node: ProsemirrorNode;
+  private view: EditorView;
+  private getPos: () => number;
   private dom: HTMLElement;
-  private mathquill;
+  private mathquill: MathField;
   private value: string;
   private cursorPos: "start" | "end";
   private focusing: boolean;
   private updating: boolean;
   private removeToken: () => void;
 
-  constructor(node, view, getPos, dispatcherPlugin) {
+  constructor(node: ProsemirrorNode, view: EditorView, getPos: () => number, dispatcherPlugin: Plugin) {
     this.node = node;
     this.view = view;
     this.getPos = getPos;
@@ -117,25 +113,24 @@ class MqNodeView {
     this.updating = true;
     this.mathquill = MathQuill.MathField(this.dom, {
       handlers: {
-        deleteOutOf: (direction, mathField) => {
+        deleteOutOf: (direction: Direction, mathField: MathField) => {
           this.exitHandler(direction, mathField);
         },
-        moveOutOf: (direction, mathField) => {
+        moveOutOf: (direction: Direction, mathField: MathField) => {
           this.exitHandler(direction, mathField);
         },
         reflow: () => {
           this.onChange();
         },
-        enter: (mathField) => {
+        enter: (mathField: MathField) => {
           this.exitHandler(1, mathField);
         }
       },
-      substituteKeyboardEvents(textarea, handlers) {
-        var newHandlers = {};
-        for (var key in handlers) { newHandlers[key] = handlers[key]; }
+      substituteKeyboardEvents: (textarea: HTMLTextAreaElement, handlers: MathQuill.SaneKeyboardHandlers) => {
+        var newHandlers = copySaneKeyboardHandlers(handlers);
 
-        var generalKeystrokeHandler = newHandlers['keystroke'].bind(newHandlers);
-        newHandlers['keystroke'] = (e, evt) => {
+        var generalKeystrokeHandler = newHandlers.keystroke.bind(newHandlers);
+        newHandlers.keystroke = (key: string, evt: KeyboardEvent) => {
           if (Keys.isUndo(evt)) {
             if (history.undo(this.view.state, this.view.dispatch)) { evt.preventDefault(); }
           } else if (Keys.isRedo(evt)) {
@@ -144,7 +139,7 @@ class MqNodeView {
             evt.preventDefault();
             this.exitHandler(1, this.mathquill);
           } else {
-            generalKeystrokeHandler(e, evt);
+            generalKeystrokeHandler(key, evt);
           }
         };
         return MathQuill.saneKeyboardEvents(textarea, newHandlers);
@@ -154,12 +149,12 @@ class MqNodeView {
     this.mathquill.latex(node.textContent);
     this.updating = false;
     const callbackRegistry = dispatcherPlugin.getState(view.state);
-    this.removeToken = callbackRegistry.add((tr, newState) => {
+    this.removeToken = callbackRegistry.add((tr: Transaction, newState: EditorState) => {
       this.setCursorPos(tr);
     });
   }
   
-  setCursorPos(tr) {
+  setCursorPos(tr: Transaction) {
     const pos = this.getPos();
     const nodeSize = this.node.nodeSize;
     if (!(tr.selection.from < pos + nodeSize && pos < tr.selection.to)) {
@@ -171,7 +166,7 @@ class MqNodeView {
     }
   }
 
-  exitHandler (direction, mathField) {
+  exitHandler (direction: Direction, mathField: MathField) {
     if (mathField.latex().length == 0) {
       this.view.dispatch(this.view.state.tr.deleteSelection());
     } else if (direction == -1) {
@@ -199,16 +194,16 @@ class MqNodeView {
       const diff = simpleDiff(this.value, newValue);
       const pos = this.getPos() + 1;
       this.value = newValue;
-      var action = this.view.state.tr.replaceWith(
+      const action = this.view.state.tr.replaceWith(
         pos + diff.from,
         pos + diff.to,
-        diff.text ? this.view.state.schema.text(diff.text) : null
-      );
+        diff.text ? this.view.state.schema.text(diff.text) : []
+      ) as Transaction;
       this.view.dispatch(action);
     }
   }
 
-  update (newNode) {
+  update (newNode: ProsemirrorNode) {
     if (newNode.type != this.node.type) { return false; }
     this.node = newNode;
     const newContent = newNode.textContent;
@@ -241,36 +236,36 @@ class MqNodeView {
   }
 }
 
-function makeMqAction (callback) {
-  return (editorState, dispatch) => {
+function makeMqAction (callback: () => void = () => {}): Command {
+  return (editorState: EditorState, dispatch: ((tr: Transaction) => void) = () => {}) => {
     const selectedText = editorState.doc.textBetween(editorState.selection.from, editorState.selection.to);
     const mqNode = editorState.schema.nodes.mq;
     const newMqNode = mqNode.create(undefined, selectedText.length > 0 ? editorState.schema.text(selectedText) : undefined);
     const newState = editorState.tr.replaceSelectionWith(newMqNode);
     const setSelection = newState.setSelection(NodeSelection.create(newState.doc, editorState.selection.from));
-    if (dispatch != undefined) { dispatch(setSelection); }
-    if (typeof callback == "function") { callback(); }
+    dispatch(setSelection);
+    callback();
     return true;
   };
 }
 
-function mqBackspaceCommand (editorState, dispatch) {
+function mqBackspaceCommand (editorState: EditorState, dispatch: ((tr: Transaction) => void) = () => {}) {
   if (!editorState.selection.empty) { return false; }
   var prevNode = editorState.selection.$from.nodeBefore;
   if (prevNode && prevNode.type.name == "mq") {
     var setSelection = editorState.tr.setSelection(NodeSelection.create(editorState.doc, editorState.selection.from - prevNode.nodeSize));
-    if (dispatch != undefined) { dispatch(setSelection); }
+    dispatch(setSelection);
     return true;
   }
   return false;
 }
 
-function mqDeleteCommand (editorState, dispatch) {
+function mqDeleteCommand (editorState: EditorState, dispatch: ((tr: Transaction) => void) = () => {}) {
   if (!editorState.selection.empty) { return false; }
   var nextNode = editorState.selection.$from.nodeAfter;
   if (nextNode && nextNode.type.name == "mq") {
     const setSelection = editorState.tr.setSelection(NodeSelection.create(editorState.doc, editorState.selection.from));
-    if (dispatch != undefined) { dispatch(setSelection); }
+    dispatch(setSelection);
     return true;
   }
   return false;
@@ -283,7 +278,7 @@ interface SubString {
   end: number
 }
 
-function splitOnRegex (str, regex): SubString[] {
+function splitOnRegex (str: string, regex: RegExp): SubString[] {
   const subStrings: SubString[] = [];
   let pos = 0, match;
   while (match = regex.exec(str)) {
@@ -316,10 +311,10 @@ function splitOnRegex (str, regex): SubString[] {
   return subStrings;
 }
 
-function makePastePlugin (regex, mkNode): Plugin {
+function makePastePlugin (regex: RegExp, mkNode: (node: ProsemirrorNode, start: number, end: number) => ProsemirrorNode): Plugin {
   function transformNode(node: ProsemirrorNode): ProsemirrorNode[] {
     if (node.isText) {
-      return splitOnRegex(node.text, regex).map((section) => {
+      return splitOnRegex(node.text as string, regex).map((section) => {
         if (section.matched) {
           return mkNode(node, section.start, section.end);
         } else {
@@ -331,7 +326,7 @@ function makePastePlugin (regex, mkNode): Plugin {
     }
   }
 
-  function transformFragment(fragment): Fragment {
+  function transformFragment(fragment: Fragment): Fragment {
     let transformed: ProsemirrorNode[] = [];
     fragment.forEach((node: ProsemirrorNode) => {
       transformed = transformed.concat(transformNode(node));
@@ -339,8 +334,8 @@ function makePastePlugin (regex, mkNode): Plugin {
     return Fragment.fromArray(transformed);
   }
 
-  function transformPasted (slice) {
-    return new Slice(transformFragment(slice.content), slice.openLeft, slice.openRight);
+  function transformPasted(slice: Slice) {
+    return new Slice(transformFragment(slice.content), slice.openStart, slice.openEnd);
   }
 
   const newProps: EditorProps = { transformPasted: transformPasted } as EditorProps;
@@ -353,7 +348,7 @@ const mathPastePlugin = makePastePlugin(MQ_REGEX, (node, start, end) => {
   return start + 1 < end - 1 ? mqNode.create(undefined, node.cut(start + 1, end - 1)) : mqNode.create();
 });
 
-const nodes = {
+const nodes: { [name: string]: NodeSpec } = {
   doc: {
     content: "block+"
   },
@@ -406,7 +401,7 @@ const nodes = {
                {tag: "h4", attrs: {level: 4}},
                {tag: "h5", attrs: {level: 5}},
                {tag: "h6", attrs: {level: 6}}],
-    toDOM(node) { return ["h" + node.attrs.level, 0] }
+    toDOM(node) { return ["h" + (node.attrs as { level: number }).level, 0] }
   },
 
   //code_block: {
@@ -431,11 +426,11 @@ const nodes = {
     },
     group: "inline",
     draggable: true,
-    parseDOM: [{tag: "img[src]", getAttrs(dom) {
+    parseDOM: [{tag: "img[src]", getAttrs(dom: Node | string) {
       return {
-        src: dom.getAttribute("src"),
-        title: dom.getAttribute("title"),
-        alt: dom.getAttribute("alt")
+        src: (dom as Element).getAttribute("src"),
+        title: (dom as Element).getAttribute("title"),
+        alt: (dom as Element).getAttribute("alt")
       }
     }}],
     toDOM(node) { return ["img", node.attrs] }
@@ -460,7 +455,7 @@ const nodes = {
   }
 };
 
-const marks = {
+const marks: { [name: string]: MarkSpec } = {
   link: {
     attrs: {
       href: {},
@@ -468,7 +463,10 @@ const marks = {
     },
     inclusive: false,
     parseDOM: [{tag: "a[href]", getAttrs(dom) {
-      return {href: dom.getAttribute("href"), title: dom.getAttribute("title")}
+      return {
+        href: (dom as Element).getAttribute("href"),
+        title: (dom as Element).getAttribute("title")
+      }
     }}],
     toDOM(node) { return ["a", node.attrs] }
   },
@@ -484,8 +482,8 @@ const marks = {
                // This works around a Google Docs misbehavior where
                // pasted content will be inexplicably wrapped in `<b>`
                // tags with a font-weight normal.
-               {tag: "b", getAttrs: node => node.style.fontWeight != "normal" && null},
-               {style: "font-weight", getAttrs: value => /^(bold(er)?|[5-9]\d{2,})$/.test(value) && null}],
+               {tag: "b", getAttrs: node => (node as HTMLElement).style.fontWeight != "normal" && null},
+               {style: "font-weight", getAttrs: (value: string) => /^(bold(er)?|[5-9]\d{2,})$/.test(value) && null}],
     toDOM() { return ["strong"] }
   }
 
@@ -501,21 +499,29 @@ const mathSchema = new Schema({
 });
 
 const menu = buildMenuItems(mathSchema);
-const makeLemmaItem = blockTypeItem(mathSchema.nodes['lemma'], {
+const makeLemmaItem = blockTypeItem((mathSchema.nodes as { lemma: NodeType }).lemma, {
   title: "Change to lemma",
   label: "Lemma"
 });
-const makeProofItem = blockTypeItem(mathSchema.nodes['proof'], {
+const makeProofItem = blockTypeItem((mathSchema.nodes as { proof: NodeType }).proof, {
   title: "Change to proof",
   label: "Proof"
 });
 
 namespace dropdown {
-  export function getContent(d: Dropdown): MenuItem[] { return d['content']; }
-  export function setContent(d: Dropdown, c: MenuItem[]) { d['content'] = c; }
+  export function getContent(d: Dropdown): MenuItem[] {
+    return ((d as Object) as { content: MenuItem[] }).content;
+  }
+  export function setContent(d: Dropdown, c: MenuItem[]) {
+    ((d as Object) as { content: MenuItem[] }).content = c;
+  }
 }
 
 dropdown.setContent(menu.typeMenu, [makeLemmaItem,makeProofItem].concat(dropdown.getContent(menu.typeMenu)));
+
+function isNodeSelection(selection: Selection): selection is NodeSelection {
+  return selection.hasOwnProperty('node');
+}
 
 function initProseMirror () {
     var isMac = typeof navigator != "undefined" ? /Mac/.test(navigator.platform) : false;
@@ -525,7 +531,7 @@ function initProseMirror () {
       {
         "$": makeMqAction(() => {
           // WORKAROUND for ProseMirror bug: reset shiftKey
-          proseMirrorView['shiftKey'] = false;
+          ((proseMirrorView as Object) as { shiftKey: boolean }).shiftKey = false;
         }),
         Backspace: chainCommands(mqBackspaceCommand, baseKeymap['Backspace']),
         Delete: chainCommands(mqDeleteCommand, baseKeymap['Delete']),
@@ -543,7 +549,7 @@ function initProseMirror () {
     return throwIfNull("no element with selector '"+selector+"' found!", document.querySelector(selector));
   }
 
-  const dispatcherPlugin = makeDispatcherPlugin();
+  const dispatcherPlugin: Plugin = makeDispatcherPlugin();
   const proseMirrorView = new EditorView(querySelector("#editor"), {
     state: EditorState.create({
       schema: mathSchema,
@@ -557,14 +563,14 @@ function initProseMirror () {
       ]
     }),
     nodeViews: {
-      mq(node, view, getPos) {
+      mq(node: ProsemirrorNode, view: EditorView, getPos: () => number) {
         return new MqNodeView(node, view, getPos, dispatcherPlugin);
       }
     }
   });
   proseMirrorView.focus();
-  dispatcherPlugin.getState(proseMirrorView.state).add((tr, editorState) => {
-    if (!proseMirrorView.hasFocus() && (editorState.selection.node == undefined || editorState.selection.node.type.name != "mq")) {
+  dispatcherPlugin.getState(proseMirrorView.state).add((tr: Transaction, editorState: EditorState) => {
+    if (!proseMirrorView.hasFocus() && (isNodeSelection(editorState.selection) ? editorState.selection.node.type.name != "mq" : true)) {
       proseMirrorView.focus();
     }
   });
