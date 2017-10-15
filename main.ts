@@ -1,10 +1,10 @@
 import {EditorState, Plugin, Selection, NodeSelection, TextSelection, Transaction} from "prosemirror-state";
 import {EditorView, EditorProps} from "prosemirror-view";
-import { Schema, DOMParser, ProsemirrorNode, Fragment, Slice, NodeSpec, MarkSpec, NodeType } from "prosemirror-model";
+import { Schema, DOMParser, Node as ProsemirrorNode, Fragment, Slice, NodeSpec, MarkSpec, NodeType } from "prosemirror-model";
 import * as history from "prosemirror-history";
 import {keymap} from "prosemirror-keymap";
 import {MenuItem, Dropdown, menuBar, blockTypeItem} from "prosemirror-menu";
-import {baseKeymap, chainCommands, Command} from "prosemirror-commands";
+import {baseKeymap, chainCommands} from "prosemirror-commands";
 import {buildMenuItems} from "prosemirror-example-setup";
 
 /// <reference types="jquery" />
@@ -90,7 +90,7 @@ class MqNodeView {
   private node: ProsemirrorNode;
   private view: EditorView;
   private getPos: () => number;
-  private dom: HTMLElement;
+  public dom: HTMLElement;
   private mathquill: MathField;
   private value: string;
   private cursorPos: "start" | "end";
@@ -153,7 +153,7 @@ class MqNodeView {
       this.setCursorPos(tr);
     });
   }
-  
+
   setCursorPos(tr: Transaction) {
     const pos = this.getPos();
     const nodeSize = this.node.nodeSize;
@@ -235,6 +235,8 @@ class MqNodeView {
     this.removeToken();
   }
 }
+
+type Command = (editorState: EditorState, dispatch?: ((tr: Transaction) => void)) => boolean;
 
 function makeMqAction (callback: () => void = () => {}): Command {
   return (editorState: EditorState, dispatch: ((tr: Transaction) => void) = () => {}) => {
@@ -354,14 +356,14 @@ const nodes: { [name: string]: NodeSpec } = {
   },
 
   paragraph: {
-    content: "inline<_>*",
+    content: "inline*",
     group: "block",
     parseDOM: [{tag: "p"}],
     toDOM() { return ["p", 0] }
   },
 
   lemma: {
-    content: "inline<_>*",
+    content: "inline*",
     group: "block",
     defining: true,
     parseDOM: [{tag: "div.lemma"}],
@@ -369,7 +371,7 @@ const nodes: { [name: string]: NodeSpec } = {
   },
 
   proof: {
-    content: "inline<_>*",
+    content: "inline*",
     group: "block",
     defining: true,
     parseDOM: [{tag: "div.proof"}],
@@ -392,7 +394,7 @@ const nodes: { [name: string]: NodeSpec } = {
 
   heading: {
     attrs: {level: {default: 1}},
-    content: "inline<_>*",
+    content: "inline*",
     group: "block",
     defining: true,
     parseDOM: [{tag: "h1", attrs: {level: 1}},

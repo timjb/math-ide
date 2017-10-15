@@ -4,22 +4,26 @@
   "description": "",
   "main": "index.js",
   "dependencies": {
-    "prosemirror-commands": "^0.20.0",
-    "prosemirror-example-setup": "^0.20.0",
-    "prosemirror-history": "^0.20.0",
-    "prosemirror-keymap": "^0.20.0",
-    "prosemirror-menu": "^0.20.0",
-    "prosemirror-model": "^0.20.0",
-    "prosemirror-state": "^0.20.0",
-    "prosemirror-view": "^0.20.3"
+    "prosemirror-commands": "^1.0.1",
+    "prosemirror-example-setup": "^1.0.0",
+    "prosemirror-history": "^1.0.0",
+    "prosemirror-keymap": "^1.0.0",
+    "prosemirror-menu": "^1.0.0",
+    "prosemirror-model": "^1.0.0",
+    "prosemirror-state": "^1.0.0",
+    "prosemirror-view": "^1.0.0"
   },
   "devDependencies": {
-    "@types/jquery": "^2.0.45",
-    "@types/prosemirror-history": "^0.18.0",
-    "@types/prosemirror-keymap": "^0.18.0",
-    "@types/prosemirror-state": "^0.18.0",
-    "@types/prosemirror-view": "^0.18.0",
-    "typescript": "^2.3.2"
+    "@types/jquery": "^3.2.13",
+    "@types/prosemirror-commands": "^0.24.0",
+    "@types/prosemirror-history": "^0.21.2",
+    "@types/prosemirror-keymap": "^0.24.0",
+    "@types/prosemirror-menu": "^0.21.2",
+    "@types/prosemirror-model": "^0.24.0",
+    "@types/prosemirror-state": "^0.24.0",
+    "@types/prosemirror-view": "^0.24.0",
+    "tsify": "^3.0.3",
+    "typescript": "^2.5.3"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
