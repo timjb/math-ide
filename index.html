@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <title>Math IDE</title>
+  <link rel="stylesheet" href="node_modules/prosemirror-view/style/prosemirror.css" />
+  <link rel="stylesheet" href="node_modules/prosemirror-menu/style/menu.css" />
+  <link rel="stylesheet" href="node_modules/prosemirror-example-setup/style/style.css" />
+  <link rel="stylesheet" href="deps/mathquill/mathquill.css" />
+  <style>
+    /*.ProseMirror { background: silver }*/
+    .lemma::before {
+      float: left;
+      display: inline-block;
+      content: "Lemma. ";
+      font-weight: bold;
+    }
+    .proof::before {
+      float: left;
+      display: inline-block;
+      content: "Proof. ";
+      font-style: italic;
+    }
+    .proof::after {
+      display: block;
+      content: "☐";
+      /*margin-top: -1em;*/
+      margin: 0; padding: 0;
+      position: absolute;
+      right: 0; bottom: 0.1em;
+      width: 16px;
+      height: 16px;
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="editor"></div>
+
+<div id="content" style="display: none">
+  <p>Recall that a category is called balanced if all morphisms that are epic and monic are isomorphisms.</p>
+  <div class="lemma">
+    <p>The category <em>C</em> is balanced</p>
+  </div>
+  <div class="proof">
+    <p>This follows from proposition 42.23. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.</p>
+  </div>
+</div>
+
+<p>Math to do:</p>
+<ul>
+  <li>Fix undo/redo</li>
+  <li>Exit by entering $</li>
+  <li>Math in menu</li>
+  <li>Math styling (smaller font)</li>
+</ul>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<script src="deps/mathquill/mathquill.min.js"></script>
+<script>MathQuill = MathQuill.getInterface(1.0);</script>
+<script src="main_bundle.js"></script>
+
+</body>
+
+</html>
