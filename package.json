@@ -23,11 +23,16 @@
     "react-scripts": "3.4.3",
     "typescript": "~3.7.2"
   },
+  "devDependencies": {
+    "prettier": "^2.1.1"
+  },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "prettier": "prettier --write --config .prettierrc.yaml '{src/**/*,public/**/*,*,.[^.],.??*}.{ts,tsx,css,js,json}'",
+    "prettier-check": "prettier --check --config .prettierrc.yaml '{src/**/*,public/**/*,*,.[^.],.??*}.{ts,tsx,css,js,json}'"
   },
   "eslintConfig": {
     "extends": "react-app"
