@@ -1,16 +1,17 @@
 import React, { FunctionComponent, useEffect, useRef, useState } from "react";
 import { EditorState, PluginKey, Plugin } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
-import { schema } from "prosemirror-schema-basic";
 import { DOMParser } from "prosemirror-model";
+import { MathSchema, mathSchema } from "./schema";
+
+import "prosemirror-view/style/prosemirror.css";
+import { createUseStyles } from "react-jss";
 
 const reactPropsKey = new PluginKey("reactProps");
 
-type BasicSchema = typeof schema;
-
 function reactProps(
   initialProps: EditorProps,
-): Plugin<EditorProps, BasicSchema> {
+): Plugin<EditorProps, MathSchema> {
   return new Plugin({
     key: reactPropsKey,
     state: {
@@ -23,23 +24,61 @@ function reactProps(
 interface EditorProps {}
 
 const initialDocumentHtml = `
-    <h1>Some heading</h1>
-    <p>An an <i>valley</i> indeed so no wonder future nature vanity. Debating all she mistaken indulged believed provided declared. He many kept on draw lain song as same. Whether at dearest certain spirits is entered in to. Rich fine bred real use too many good. She compliment unaffected expression favourable any. Unknown <b>chiefly</b> showing to conduct no. Hung as love evil able to post at as. </p>
+    <h1>Balanced Categories</h1>
+    <p>Recall that a category is called balanced if all morphisms that are epic and monic are isomorphisms.</p>
+    <div class="lemma">
+      <p>The category <em>C</em> is balanced</p>
+    </div>
+    <div class="proof">
+      <p>This follows from proposition 42.23. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.</p>
+    </div>
     `;
 const initialDocumentNode = document.createElement("div");
 initialDocumentNode.innerHTML = initialDocumentHtml;
 
+const useStyles = createUseStyles({
+  container: {
+    margin: "0 10px",
+
+    "& .lemma::before": {
+      float: "left",
+      display: "inline-block",
+      content: '"Lemma. "',
+      fontWeight: "bold",
+    },
+    "& .proof::before": {
+      float: "left",
+      display: "inline-block",
+      content: '"Proof. "',
+      fontStyle: "italic",
+    },
+    "& .proof::after": {
+      display: "block",
+      content: '"☐"',
+      /*margin-top: -1em;*/
+      margin: 0,
+      padding: 0,
+      position: "absolute",
+      right: 0,
+      bottom: "0.1em",
+      width: "16px",
+      height: "16px",
+    },
+  },
+});
+
 export const Editor: FunctionComponent<EditorProps> = (props) => {
+  const classes = useStyles();
   const [viewHost, setViewHost] = useState<HTMLDivElement | null>(null);
-  const view = useRef<EditorView<BasicSchema> | undefined>(undefined);
+  const view = useRef<EditorView<MathSchema> | undefined>(undefined);
   const [initialProps] = useState(() => props);
 
   useEffect(() => {
     // initial render
     if (viewHost !== null) {
-      const state = EditorState.create<BasicSchema>({
-        schema,
-        doc: DOMParser.fromSchema(schema).parse(initialDocumentNode),
+      const state = EditorState.create<MathSchema>({
+        schema: mathSchema,
+        doc: DOMParser.fromSchema(mathSchema).parse(initialDocumentNode),
         plugins: [reactProps(initialProps)],
       });
       const editorView = new EditorView(viewHost, { state });
@@ -59,5 +98,5 @@ export const Editor: FunctionComponent<EditorProps> = (props) => {
     }
   });
 
-  return <div ref={setViewHost} />;
+  return <div ref={setViewHost} className={classes.container} />;
 };
