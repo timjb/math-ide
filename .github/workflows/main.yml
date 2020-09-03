@@ -1,0 +1,26 @@
+name: Actions
+
+on:
+  push:
+    branches:
+      - lambda-calculus
+  schedule:
+    - cron: '0 3 1 * *' # monthly
+
+jobs:
+  build:
+    name: Run quality checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Use Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: 12.x
+      - name: Install NPM dependencies
+        run: npm ci
+      - name: Check formatting using Prettier
+        run: npm run prettier-check
+      - name: Check Dependency Cruiser rules
+        run: npm run depcruise-check
