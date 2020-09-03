@@ -6,6 +6,9 @@ import { MathSchema, mathSchema } from "./schema";
 
 import "prosemirror-view/style/prosemirror.css";
 import { createUseStyles } from "react-jss";
+import { keymap } from "prosemirror-keymap";
+import { baseKeymap } from "prosemirror-commands";
+import { undo, redo, history } from "prosemirror-history";
 
 const reactPropsKey = new PluginKey("reactProps");
 
@@ -79,7 +82,12 @@ export const Editor: FunctionComponent<EditorProps> = (props) => {
       const state = EditorState.create<MathSchema>({
         schema: mathSchema,
         doc: DOMParser.fromSchema(mathSchema).parse(initialDocumentNode),
-        plugins: [reactProps(initialProps)],
+        plugins: [
+          reactProps(initialProps),
+          history(),
+          keymap({ "Mod-z": undo, "Mod-y": redo }),
+          keymap(baseKeymap),
+        ],
       });
       const editorView = new EditorView(viewHost, { state });
       view.current = editorView;
