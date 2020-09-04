@@ -1,14 +1,14 @@
 import React, { FunctionComponent, useEffect, useRef, useState } from "react";
-import { EditorState, PluginKey, Plugin } from "prosemirror-state";
+import { EditorState, Plugin, PluginKey } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
-import { DOMParser } from "prosemirror-model";
+import { Node } from "prosemirror-model";
 import { MathSchema, mathSchema } from "./schema";
 
 import "prosemirror-view/style/prosemirror.css";
 import { createUseStyles } from "react-jss";
 import { keymap } from "prosemirror-keymap";
 import { baseKeymap } from "prosemirror-commands";
-import { undo, redo, history } from "prosemirror-history";
+import { history, redo, undo } from "prosemirror-history";
 
 const reactPropsKey = new PluginKey("reactProps");
 
@@ -26,18 +26,44 @@ function reactProps(
 
 interface EditorProps {}
 
-const initialDocumentHtml = `
-    <h1>Balanced Categories</h1>
-    <p>Recall that a category is called balanced if all morphisms that are epic and monic are isomorphisms.</p>
-    <div class="lemma">
-      <p>The category <em>C</em> is balanced</p>
-    </div>
-    <div class="proof">
-      <p>This follows from proposition 42.23. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.</p>
-    </div>
-    `;
-const initialDocumentNode = document.createElement("div");
-initialDocumentNode.innerHTML = initialDocumentHtml;
+const initialDoc = Node.fromJSON<MathSchema>(mathSchema, {
+  type: "doc",
+  content: [
+    {
+      type: "heading",
+      attrs: { level: 1 },
+      content: [{ type: "text", text: "Balanced Categories" }],
+    },
+    {
+      type: "paragraph",
+      content: [
+        {
+          type: "text",
+          text:
+            "Recall that a category is called balanced if all morphisms that are epic and monic are isomorphisms.",
+        },
+      ],
+    },
+    {
+      type: "lemma",
+      content: [
+        { type: "text", text: "The category " },
+        { type: "text", marks: [{ type: "em" }], text: "C" },
+        { type: "text", text: " is balanced" },
+      ],
+    },
+    {
+      type: "proof",
+      content: [
+        {
+          type: "text",
+          text:
+            "This follows from proposition 42.23. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.",
+        },
+      ],
+    },
+  ],
+});
 
 const useStyles = createUseStyles({
   container: {
@@ -58,7 +84,6 @@ const useStyles = createUseStyles({
     "& .proof::after": {
       display: "block",
       content: '"☐"',
-      /*margin-top: -1em;*/
       margin: 0,
       padding: 0,
       position: "absolute",
@@ -81,7 +106,7 @@ export const Editor: FunctionComponent<EditorProps> = (props) => {
     if (viewHost !== null) {
       const state = EditorState.create<MathSchema>({
         schema: mathSchema,
-        doc: DOMParser.fromSchema(mathSchema).parse(initialDocumentNode),
+        doc: initialDoc,
         plugins: [
           reactProps(initialProps),
           history(),
