@@ -9,8 +9,16 @@ type NodeName =
   | "heading"
   | "text"
   | "image"
-  | "hard_break";
-// | "mq";
+  | "hard_break"
+  | "lambda_block"
+  | "abstraction"
+  | "var_ref"
+  | "application"
+  | "binder"
+  | "lambda_char"
+  | "binder_separator"
+  | "open_paren"
+  | "close_paren";
 
 const nodes: { [name in NodeName]: NodeSpec } = {
   doc: {
@@ -46,14 +54,6 @@ const nodes: { [name in NodeName]: NodeSpec } = {
     },
   },
 
-  //blockquote: {
-  //  content: "block+",
-  //  group: "block",
-  //  defining: true,
-  //  parseDOM: [{tag: "blockquote"}],
-  //  toDOM() { return ["blockquote", 0] }
-  //},
-
   horizontal_rule: {
     group: "block",
     parseDOM: [{ tag: "hr" }],
@@ -79,15 +79,6 @@ const nodes: { [name in NodeName]: NodeSpec } = {
       return ["h" + (node.attrs as { level: number }).level, 0];
     },
   },
-
-  //code_block: {
-  //  content: "text*",
-  //  group: "block",
-  //  code: true,
-  //  defining: true,
-  //  parseDOM: [{tag: "pre", preserveWhitespace: "full"}],
-  //  toDOM() { return ["pre", ["code", 0]] }
-  //},
 
   text: {
     group: "inline",
@@ -129,20 +120,105 @@ const nodes: { [name in NodeName]: NodeSpec } = {
     },
   },
 
-  // mq: {
-  //   inline: true,
-  //   group: "inline",
-  //   content: "text*",
-  //   selectable: true,
-  //   toDOM(node) {
-  //     return "$" + node.textContent + "$";
-  //   },
-  // },
+  // lambda calculus
+
+  lambda_block: {
+    content: "lambda_expression*",
+    group: "block",
+    parseDOM: [{ tag: "div.lambda_block" }],
+    toDOM() {
+      return ["div", { class: "lambda_block" }, 0];
+    },
+  },
+
+  abstraction: {
+    inline: true,
+    group: "lambda_expression",
+    content: "lambda_char binder lambda_expression",
+    parseDOM: [{ tag: "span.abstraction" }],
+    // isolating: true,
+    toDOM() {
+      return ["span", { class: "abstraction" }, 0];
+    },
+  },
+
+  application: {
+    inline: true,
+    group: "lambda_expression",
+    content: "lambda_expression open_paren lambda_expression close_paren",
+    parseDOM: [{ tag: "span.application" }],
+    toDOM() {
+      return ["span", { class: "application" }, 0];
+    },
+  },
+
+  var_ref: {
+    inline: true,
+    group: "lambda_expression",
+    content: "text*",
+    parseDom: [{ tag: "span.var_ref" }],
+    toDOM() {
+      return ["span", { class: "var_ref" }, 0];
+    },
+  },
+
+  binder: {
+    inline: true,
+    content: "text* binder_separator",
+    parseDom: [{ tag: "span.binder" }],
+    toDOM() {
+      return ["span", { class: "binder" }, 0];
+    },
+  },
+
+  lambda_char: {
+    inline: true,
+    content: "",
+    atom: true,
+    selectable: false,
+    parseDom: [{ tag: "span.lambda_char" }],
+    toDOM() {
+      return ["span", { class: "lambda_char" }, "λ"];
+    },
+  },
+
+  binder_separator: {
+    inline: true,
+    content: "",
+    atom: true,
+    selectable: false,
+    parseDom: [{ tag: "span.binder_separator" }],
+    toDOM() {
+      return ["span", { class: "binder_separator" }, ". "];
+    },
+  },
+
+  open_paren: {
+    inline: true,
+    content: "",
+    atom: true,
+    selectable: false,
+    parseDom: [{ tag: "span.open_paren" }],
+    toDOM() {
+      return ["span", { class: "open_paren" }, "("];
+    },
+  },
+
+  close_paren: {
+    inline: true,
+    content: "",
+    atom: true,
+    selectable: false,
+    parseDom: [{ tag: "span.close_paren" }],
+    toDOM() {
+      return ["span", { class: "close_paren" }, ")"];
+    },
+  },
 };
 
-type MarkName = "link" | "em" | "strong";
+export type MathMarkName = "link" | "em" | "strong";
 
-const marks: { [name in MarkName]: MarkSpec } = {
+const marks: { [name in MathMarkName]: MarkSpec } = {
   link: {
     attrs: {
       href: {},

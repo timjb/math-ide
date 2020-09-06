@@ -2,7 +2,7 @@ import React, { FunctionComponent, useEffect, useRef, useState } from "react";
 import { EditorState, Plugin, PluginKey } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { Node } from "prosemirror-model";
-import { MathSchema, mathSchema } from "./schema";
+import { MathMarkName, MathSchema, mathSchema } from "./schema";
 
 import "prosemirror-view/style/prosemirror.css";
 import { createUseStyles } from "react-jss";
@@ -26,39 +26,64 @@ function reactProps(
 
 interface EditorProps {}
 
+const mkTextNodeJson = (
+  text: string,
+  extra: { marks?: { type: MathMarkName }[] } = {},
+) => ({ type: "text", text, ...extra });
+
 const initialDoc = Node.fromJSON<MathSchema>(mathSchema, {
   type: "doc",
   content: [
     {
       type: "heading",
       attrs: { level: 1 },
-      content: [{ type: "text", text: "Balanced Categories" }],
+      content: [mkTextNodeJson("Balanced Categories")],
     },
     {
       type: "paragraph",
       content: [
-        {
-          type: "text",
-          text:
-            "Recall that a category is called balanced if all morphisms that are epic and monic are isomorphisms.",
-        },
+        mkTextNodeJson(
+          "Recall that a category is called balanced if all morphisms that are epic and monic are isomorphisms.",
+        ),
       ],
     },
     {
       type: "lemma",
       content: [
-        { type: "text", text: "The category " },
-        { type: "text", marks: [{ type: "em" }], text: "C" },
-        { type: "text", text: " is balanced" },
+        mkTextNodeJson("The category "),
+        mkTextNodeJson("C", { marks: [{ type: "em" }] }),
+        mkTextNodeJson(" is balanced"),
       ],
     },
     {
       type: "proof",
       content: [
+        mkTextNodeJson(
+          "This follows from proposition 42.23. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.",
+        ),
+      ],
+    },
+    {
+      type: "lambda_block",
+      content: [
         {
-          type: "text",
-          text:
-            "This follows from proposition 42.23. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.",
+          type: "abstraction",
+          content: [
+            { type: "lambda_char" },
+            {
+              type: "binder",
+              content: [mkTextNodeJson("x"), { type: "binder_separator" }],
+            },
+            {
+              type: "application",
+              content: [
+                { type: "var_ref", content: [mkTextNodeJson("x")] },
+                { type: "open_paren" },
+                { type: "var_ref", content: [mkTextNodeJson("x")] },
+                { type: "close_paren" },
+              ],
+            },
+          ],
         },
       ],
     },
@@ -91,6 +116,12 @@ const useStyles = createUseStyles({
       bottom: "0.1em",
       width: "16px",
       height: "16px",
+    },
+    "& .lambda_block": {
+      textAlign: "center",
+    },
+    "& .lambda_char, & .binder_separator": {
+      color: "#555",
     },
   },
 });
